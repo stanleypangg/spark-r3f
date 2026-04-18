@@ -1,14 +1,20 @@
 # spark-r3f
 
-Gaussian splatting for React Three Fiber, in three lines.
+**Gaussian splats for React, in one line.**
 
 ```tsx
 import { SparkViewer } from "spark-r3f";
 
-<SparkViewer url="/butterfly.spz" />
+<SparkViewer url="/scene.spz" />
 ```
 
-Wraps [`@sparkjsdev/spark`](https://github.com/sparkjsdev/spark) (the World Labs Gaussian splat renderer) for [`@react-three/fiber`](https://github.com/pmndrs/react-three-fiber), and fixes Spark's silent `frameloop="demand"` + `invalidate()` race ([spark#173](https://github.com/sparkjsdev/spark/issues/173)).
+That's the whole API for the 90% case. Orbit controls, right-side-up orientation, efficient on-demand rendering: all handled.
+
+For the other 10%, the same library exposes composable primitives so you can drop down to full [`@react-three/fiber`](https://github.com/pmndrs/react-three-fiber) control without rewriting.
+
+## Why
+
+Gaussian splats are the fastest way to put photorealistic 3D captures on the web. But today, integrating one means learning Three.js, React Three Fiber, and [`@sparkjsdev/spark`](https://github.com/sparkjsdev/spark) all at once, plus wrestling with render-loop wiring and coordinate conventions. `spark-r3f` collapses that to a single component for the common case, with sensible defaults for everything you'd otherwise configure by hand.
 
 ## Install
 
@@ -16,7 +22,7 @@ Wraps [`@sparkjsdev/spark`](https://github.com/sparkjsdev/spark) (the World Labs
 npm i spark-r3f three @react-three/fiber @sparkjsdev/spark
 ```
 
-(All deps except `spark-r3f` are peer dependencies — they share a single copy of `three` with the rest of your app.)
+Everything except `spark-r3f` is a peer dependency. Your app supplies its own copy of Three.js, R3F, and Spark, and this library plugs into them.
 
 ## Usage
 
@@ -30,7 +36,11 @@ export default function App() {
 }
 ```
 
+Props you can pass: `url`, `autoRotate`, `camera`, `controls`, `background`, `upAxis`, `onLoad`, `style`, `className`, `children`.
+
 ### Compose manually
+
+When you need lights, multiple splats, custom controls, or anything else in the scene:
 
 ```tsx
 import { SparkCanvas, SparkControls, Splat } from "spark-r3f";
@@ -45,34 +55,39 @@ export default function App() {
 }
 ```
 
-Supports `.spz`, `.ply`, `.ksplat`, `.splat` — whatever Spark supports.
+`<SparkCanvas>` is a `<Canvas>` with Spark wired up; `<Splat>` is a declarative `SplatMesh`; you can mix in any R3F/Three.js primitives as children.
 
-## Why this exists
-
-`@react-three/fiber` supports demand-mode rendering (`frameloop="demand"`) — the app stays at 0 FPS unless something tells it to paint. Spark's splat sort runs on a worker, and in stock R3F the sort's completion doesn't trigger `invalidate()`, so visual updates stall until the camera moves. `spark-r3f`'s `<SparkCanvas>` wires Spark's `onDirty` callback to R3F's `invalidate()` — demand mode "just works."
-
-See `examples/src/demos/BugFixSideBySide.tsx` for a visible before/after.
+Supports `.spz`, `.ply`, `.ksplat`, `.splat`: whatever Spark supports.
 
 ## API
 
 | export | purpose |
 |---|---|
-| `<SparkViewer>` | Drop-in: renders a splat with default camera, controls, and lighting. Single-prop: `url`. |
+| `<SparkViewer>` | Drop-in viewer with sensible defaults. Required prop: `url`. |
 | `<SparkCanvas>` | `<Canvas>` wrapper with Spark wired up. Defaults `frameloop="demand"`, `gl.antialias: false`. |
 | `<Splat>` | Declarative `SplatMesh`. Props: `url` / `fileBytes`, `position`, `rotation`, `scale`, `color`, `opacity`, `onLoad`, `ref`. |
 | `<SparkControls>` | Hand-rolled orbit controls. No `@react-three/drei` dependency. |
 
+## How it works
+
+Two decisions make the one-line API work:
+
+1. **Demand-mode rendering is actually driven.** `<SparkCanvas>` defaults to R3F's `frameloop="demand"` (idle at 0 FPS until something changes) and bridges Spark's internal `onDirty` callback to R3F's `invalidate()`, so splats repaint when they need to and stay quiet otherwise. Without this wiring, demand mode causes visible stalls; `spark-r3f` handles it automatically.
+2. **Splats render right-side up by default.** Most capture pipelines export with Y pointing down, which renders upside down in Three.js's Y-up world. `<SparkViewer>` applies the flip for you. Pass `upAxis="y-up"` to opt out.
+
+Neither of these is something you should ever have to think about. They're internal plumbing that make the public API feel simple.
+
 ## Not yet supported (v0.1)
 
-- React `<StrictMode>` double-invocation (disable for now — Spark's worker isn't re-entrant in dev).
+- React `<StrictMode>` double-invocation (disable for now; Spark's worker isn't re-entrant in dev).
 - Multiple `<SparkCanvas>` instances on one page ([spark#107](https://github.com/sparkjsdev/spark/issues/107)).
 - Next.js SSR helpers.
 - WebXR / hand tracking.
-- Declarative `<SplatEdit>`, `<SplatSkinning>` — drop down to the underlying classes via `<Splat ref>`.
+- Declarative `<SplatEdit>` / `<SplatSkinning>`. Drop down to the underlying classes via `<Splat ref>`.
 
 ## Status
 
-v0.1 — alpha. Feedback and issues welcome.
+v0.1, alpha. Feedback and issues welcome.
 
 ## License
 
